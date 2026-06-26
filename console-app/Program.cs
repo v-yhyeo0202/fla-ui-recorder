@@ -25,6 +25,7 @@ List<ControlType> listKeyPressControlType = new()
     ControlType.Edit,
 };
 List<AutomationEventHandlerBase> listKeyPressEventHandler = new();
+AutomationElement[] arrayPreviousKeyPressElement;
 
 List<ControlType> listClickableControlType = new()
 {
@@ -34,9 +35,13 @@ List<ControlType> listClickableControlType = new()
     ControlType.MenuItem,
     ControlType.TreeItem
 };
-
-AutomationElement[] arrayPreviousKeyPressElement;
 AutomationElement[] arrayPreviousClickableElement;
+
+List<ControlType> listEvaluableControlType = new()
+{
+    ControlType.Text
+};
+AutomationElement[] arrayPreviousEvaluableElement;
 List<StepConfig> listStep = new();
 
 void Attach2Process()
@@ -177,33 +182,40 @@ void AddKeyPressStep(AutomationElement element, EventId eventId)
     return;
 }
 
-void AddMouseClickStep()
+AutomationElement GetMousePointedElement(AutomationElement[] arrayElement)
 {
     System.Drawing.Point mousePosition = lowLevelRecorder.mousePosition;
     int minArea = int.MaxValue;
-    AutomationElement clickedElement = null;
+    AutomationElement mousePointedElement = null;
 
-    foreach (AutomationElement descendantElement in arrayPreviousClickableElement)
+    foreach (AutomationElement element in arrayElement)
     {
-        if (descendantElement.BoundingRectangle.Contains(mousePosition))
+        if (element.BoundingRectangle.Contains(mousePosition))
         {
-            int area = descendantElement.BoundingRectangle.Width * descendantElement.BoundingRectangle.Height;
+            int area = element.BoundingRectangle.Width * element.BoundingRectangle.Height;
 
             if (area < minArea)
             {
                 minArea = area;
-                clickedElement = descendantElement;
+                mousePointedElement = element;
             }
         }
     }
 
-    if (clickedElement != null)
+    return mousePointedElement;
+}
+
+void AddMouseClickStep()
+{
+    AutomationElement element = GetMousePointedElement(arrayPreviousClickableElement);
+
+    if (element != null)
     {
-        string xPath = GetXPath(clickedElement);
+        string xPath = GetXPath(element);
         ClickType clickType = lowLevelRecorder.clickType;
         listStep.Add(new StepConfig
         {
-            controlType = clickedElement.ControlType.ToString(),
+            controlType = element.ControlType.ToString(),
             xPath = xPath,
             clickType = clickType == ClickType.Left ? null : clickType.ToString()
         });
@@ -219,11 +231,68 @@ void AddMouseClickStep()
     return;
 }
 
+void AddEvaluationStep()
+{
+    AutomationElement element = GetMousePointedElement(arrayPreviousEvaluableElement);
+
+    if (element != null)
+    {
+        string xPath = GetXPath(element);
+        listStep.Add(new StepConfig
+        {
+            controlType = element.ControlType.ToString(),
+            xPath = xPath,
+            bEvaluation = true
+        });
+    }
+
+    foreach (StepConfig step in listStep)
+    {
+        Console.WriteLine($"debug0 {step.controlType}; {step.xPath}; {step.text}; {step.clickType}");
+    }
+
+    return;
+}
+
 void SetMouseClickStep()
 {
     listStep.Last().clickType = lowLevelRecorder.clickType.ToString();
 
     return;
+}
+
+AutomationElement[] GetPreviousDesktopElement(List<ControlType> listControlType)
+{
+    AutomationElement[] arrayElement = automation.GetDesktop()
+        .FindAllChildren()
+        .Where(i =>
+        {
+            try
+            {
+                return i.Name == window.Name || string.IsNullOrEmpty(i.Name);
+            }
+            catch
+            {
+                return false;
+            }
+        })
+        .SelectMany(j => j.FindAllDescendants())
+        .Where(k =>
+        {
+            try
+            {
+                string dummy = $"{k.AutomationId},{k.Name},{k.ControlType}";
+                Console.WriteLine($"debug1 {dummy}");
+                return !k.IsOffscreen && listControlType.Contains(k.ControlType);
+            }
+            catch
+            {
+                return false;
+            }
+        })
+        .ToArray();
+
+    return arrayElement;
 }
 
 void RegisterAutomationEvent(bool bRefreshWindow = false)
@@ -247,33 +316,8 @@ void RegisterAutomationEvent(bool bRefreshWindow = false)
 
     window = app.GetMainWindow(automation);
     arrayPreviousKeyPressElement = window.FindAllDescendants();
-    arrayPreviousClickableElement = automation.GetDesktop()
-        .FindAllChildren()
-        .Where(i =>
-        {
-            try
-            {
-                return i.Name == window.Name || string.IsNullOrEmpty(i.Name);
-            }
-            catch
-            {
-                return false;
-            }
-        })
-        .SelectMany(j => j.FindAllDescendants())
-        .Where(k =>
-        {
-            try
-            {
-                string dummy = $"{k.AutomationId},{k.Name},{k.ControlType}";
-                return !k.IsOffscreen && listClickableControlType.Contains(k.ControlType);
-            }
-            catch
-            {
-                return false;
-            }
-        })
-        .ToArray();
+    arrayPreviousClickableElement = GetPreviousDesktopElement(listClickableControlType);
+    arrayPreviousEvaluableElement = GetPreviousDesktopElement(listEvaluableControlType);
 
     foreach (ControlType controlType in listKeyPressControlType)
     {
@@ -307,7 +351,7 @@ void RegisterAutomationEvent(bool bRefreshWindow = false)
 
 Attach2Process();
 RegisterAutomationEvent();
-lowLevelRecorder.SetMouseClickStep(AddMouseClickStep, SetMouseClickStep);
+lowLevelRecorder.SetStep(AddMouseClickStep, SetMouseClickStep, AddEvaluationStep);
 Console.ReadKey();
 
 lowLevelRecorder.Stop();
