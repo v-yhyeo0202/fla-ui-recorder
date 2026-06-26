@@ -1,26 +1,15 @@
-﻿using FlaUI.Core.AutomationElements;
+﻿using console_app;
+using FlaUI.Core.AutomationElements;
 using FlaUI.Core.Definitions;
 using FlaUI.Core.EventHandlers;
 using FlaUI.Core.Identifiers;
-using FlaUI.Core.Input;
 using FlaUI.UIA3;
 using Shared;
 using System.Diagnostics;
 using System.IO;
-using System.Runtime.InteropServices;
 using System.Text.Encodings.Web;
 using System.Text.Json;
 using YamlDotNet.Serialization;
-
-[DllImport("user32.dll")] static extern IntPtr SetWindowsHookEx(int idHook, LowLevelMouseProc lpfn, IntPtr hMod, uint dwThreadId);
-[DllImport("user32.dll")] static extern bool UnhookWindowsHookEx(IntPtr hhk);
-[DllImport("user32.dll")] static extern int GetMessage(out MSG lpMsg, IntPtr hWnd, uint wMsgFilterMin, uint wMsgFilterMax);
-[DllImport("user32.dll")] static extern bool PostThreadMessage(uint idThread, uint Msg, IntPtr wParam, IntPtr lParam);
-[DllImport("user32.dll")] static extern uint GetDoubleClickTime();
-[DllImport("kernel32.dll")] static extern uint GetCurrentThreadId();
-
-uint hookThreadId = 0;
-uint lastLButtonDownTime = 0;
 
 string configText = File.ReadAllText("config.yml");
 UserConfig config = new DeserializerBuilder().Build().Deserialize<UserConfig>(configText);
@@ -29,6 +18,7 @@ FlaUI.Core.Application app;
 using UIA3Automation automation = new();
 Window window;
 VisualStudioLauncher launcher = new();
+LowLevelRecorder lowLevelRecorder = new();
 
 List<ControlType> listEventControlType = new()
 {
@@ -146,67 +136,74 @@ string GetXPath(AutomationElement element)
 void AddEventStep(AutomationElement element, EventId eventId)
 {
     Console.WriteLine("AddEventStep");
-    bSuppressStructureChangedEvent = true;
-    string xPath = GetXPath(element);
     bool bRefreshWindow = false;
+    bSuppressStructureChangedEvent = true;
 
-    if (eventId == automation.EventLibrary.Text.TextChangedEvent && element.Properties.IsKeyboardFocusable)
+    try
     {
-        if (listStep.Last().xPath == xPath)
+        string xPath = GetXPath(element);
+
+        if (eventId == automation.EventLibrary.Text.TextChangedEvent && element.Properties.IsKeyboardFocusable)
         {
-            listStep.Last().text = element.AsTextBox().Text;
+            if (listStep.Last().xPath == xPath)
+            {
+                listStep.Last().text = element.AsTextBox().Text;
+            }
+            else
+            {
+                listStep.Add(new StepConfig
+                {
+                    controlType = element.ControlType.ToString(),
+                    xPath = xPath,
+                    text = element.AsTextBox().Text
+                });
+            }
+        }
+        else if (eventId == automation.EventLibrary.Invoke.InvokedEvent)
+        {
+            listStep.Add(new StepConfig
+            {
+                controlType = element.ControlType.ToString(),
+                xPath = xPath
+            });
+
+            if (element.ControlType == ControlType.MenuItem)
+            {
+                bRefreshWindow = true;
+            }
+        }
+        else if (element.ControlType == ControlType.ComboBox)
+        {
+            ComboBoxItem selectedItem = element.AsComboBox().SelectedItem;
+
+            if (selectedItem != null)
+            {
+                listStep.Add(new StepConfig
+                {
+                    controlType = element.ControlType.ToString(),
+                    xPath = xPath,
+                    text = selectedItem.Text
+                });
+            }
         }
         else
         {
             listStep.Add(new StepConfig
             {
                 controlType = element.ControlType.ToString(),
-                xPath = xPath,
-                text = element.AsTextBox().Text
+                xPath = xPath
             });
         }
     }
-    else if(eventId == automation.EventLibrary.Invoke.InvokedEvent)
+    finally
     {
-        listStep.Add(new StepConfig
-        {
-            controlType = element.ControlType.ToString(),
-            xPath = xPath
-        });
+        RegisterTargetedAutomationEvent(bRefreshWindow);
+        lowLevelRecorder.clickType = ClickType.None;
 
-        if(element.ControlType == ControlType.MenuItem)
+        foreach (StepConfig step in listStep)
         {
-            bRefreshWindow = true;
+            Console.WriteLine($"debug0 {step.controlType}; {step.xPath}; {step.text}; {step.clickType}");
         }
-    }
-    else if(element.ControlType == ControlType.ComboBox)
-    {
-        ComboBoxItem selectedItem = element.AsComboBox().SelectedItem;
-
-        if(selectedItem != null)
-        {
-            listStep.Add(new StepConfig
-            {
-                controlType = element.ControlType.ToString(),
-                xPath = xPath,
-                text = selectedItem.Text
-            });
-        }
-    }
-    else
-    {
-        listStep.Add(new StepConfig
-        {
-            controlType = element.ControlType.ToString(),
-            xPath = xPath
-        });
-    }
-
-    RegisterTargetedAutomationEvent(bRefreshWindow);
-
-    foreach (StepConfig step in listStep)
-    {
-        Console.WriteLine($"debug0 {step.controlType}; {step.xPath}; {step.text}; {step.bRightClick}");
     }
 
     return;
@@ -214,7 +211,7 @@ void AddEventStep(AutomationElement element, EventId eventId)
 
 void AddStructureChangedStep(AutomationElement element, StructureChangeType changeType, int[] runtimeId)
 {
-    if(bSuppressStructureChangedEvent)
+    if(bSuppressStructureChangedEvent || lowLevelRecorder.clickType == ClickType.None)
     {
         bSuppressStructureChangedEvent = false;
 
@@ -233,11 +230,7 @@ void AddStructureChangedStep(AutomationElement element, StructureChangeType chan
         return;
     }
 
-    try
-    {
-        Console.WriteLine("AddStructureChangedStep");
-    }
-    catch { }
+    Console.WriteLine("AddStructureChangedStep");
 
     try
     {
@@ -248,57 +241,58 @@ void AddStructureChangedStep(AutomationElement element, StructureChangeType chan
 
         foreach (ControlType controlType in listStructureChangedControlType)
         {
-            HashSet<string> setCurrentStructure = window.FindAllDescendants(cf => cf.ByControlType(controlType))
-                .Select(i => $"{i.AutomationId},{i.Name}")
-                .ToHashSet();
-
-            if (setCurrentStructure.Except(dictPreviousStructure[controlType]).Count() > 0)
+            try
             {
-                changedControlType = controlType;
-                bStructureAdded = true;
+                HashSet<string> setCurrentStructure = window.FindAllDescendants(cf => cf.ByControlType(controlType))
+                    .Select(i => $"{i.AutomationId},{i.Name}")
+                    .ToHashSet();
 
-                break;
+                if (setCurrentStructure.Except(dictPreviousStructure[controlType]).Count() > 0)
+                {
+                    changedControlType = controlType;
+                    bStructureAdded = true;
+                }
+                else if(dictPreviousStructure[controlType].Except(setCurrentStructure).Count() > 0)
+                {
+                    bStructureRemoved = true;
+                }
             }
-            else if(dictPreviousStructure[controlType].Except(setCurrentStructure).Count() > 0)
-            {
-                bStructureRemoved = true;
-
-                break;
-            }
+            catch { }
         }
 
         if(bStructureAdded)
         {
-            if (changedControlType == ControlType.ListItem || changedControlType == ControlType.Menu || changedControlType == ControlType.MenuItem)
+            System.Drawing.Point mousePosition = lowLevelRecorder.mousePosition;
+            Console.WriteLine($"debug2 {mousePosition} {arrayPreviousElement.Count()}");
+            int minArea = int.MaxValue;
+            AutomationElement clickedElement = null;
+
+            foreach(AutomationElement descendantElement in arrayPreviousElement)
             {
-                System.Drawing.Point mousePosition = Mouse.Position;
-                int minArea = int.MaxValue;
-                AutomationElement clickedElement = null;
-
-                foreach(AutomationElement descendantElement in arrayPreviousElement)
+                Console.WriteLine($"debug5 {descendantElement.Name} {descendantElement.BoundingRectangle}");
+                if (descendantElement.BoundingRectangle.Contains(mousePosition))
                 {
-                    if (descendantElement.BoundingRectangle.Contains(mousePosition))
-                    {
-                        int area = descendantElement.BoundingRectangle.Width * descendantElement.BoundingRectangle.Height;
+                    int area = descendantElement.BoundingRectangle.Width * descendantElement.BoundingRectangle.Height;
 
-                        if (area < minArea)
-                        {
-                            minArea = area;
-                            clickedElement = descendantElement;
-                        }
+                    if (area < minArea)
+                    {
+                        minArea = area;
+                        clickedElement = descendantElement;
                     }
                 }
+            }
 
-                if(clickedElement != null)
+            if(clickedElement != null)
+            {
+                Console.WriteLine($"debug3 {clickedElement.Name}");
+                string xPath = $".//{clickedElement.ControlType}[@AutomationId='{clickedElement.AutomationId}' and @Name='{clickedElement.Name}']";
+                ClickType clickType = lowLevelRecorder.clickType;
+                listStep.Add(new StepConfig
                 {
-                    string xPath = $".//{clickedElement.ControlType}[@AutomationId='{clickedElement.AutomationId}' and @Name='{clickedElement.Name}']";
-                    listStep.Add(new StepConfig
-                    {
-                        controlType = clickedElement.ControlType.ToString(),
-                        xPath = xPath,
-                        bRightClick = changedControlType == ControlType.Menu
-                    });
-                }
+                    controlType = clickedElement.ControlType.ToString(),
+                    xPath = xPath,
+                    clickType = clickType == ClickType.Left ? null : clickType.ToString()
+                });
             }
 
             RegisterTargetedAutomationEvent(); 
@@ -307,41 +301,13 @@ void AddStructureChangedStep(AutomationElement element, StructureChangeType chan
         {
             RegisterTargetedAutomationEvent();
         }
+
+        lowLevelRecorder.clickType = ClickType.None;
     }
     catch { }
 
     return;
 }
-
-IntPtr MouseHookCallback(int nCode, IntPtr wParam, IntPtr lParam)
-{
-    if (nCode >= 0)
-    {
-        MSLLHOOKSTRUCT hookStruct = Marshal.PtrToStructure<MSLLHOOKSTRUCT>(lParam);
-
-        switch ((int)wParam)
-        {
-            case 0x0201:
-                if (hookStruct.time - lastLButtonDownTime <= GetDoubleClickTime())
-                {
-                    Console.WriteLine($"Double click at {hookStruct.pt}");
-                    lastLButtonDownTime = 0;
-                }
-                else
-                {
-                    Console.WriteLine($"Left click at {hookStruct.pt}");
-                    lastLButtonDownTime = hookStruct.time;
-                }
-                break;
-            case 0x0204:
-                Console.WriteLine($"Right click at {hookStruct.pt}");
-                break;
-        }
-    }
-
-    return 0;
-}
-
 
 void RegisterTargetedAutomationEvent(bool bRefreshWindow = false)
 {
@@ -428,7 +394,7 @@ void RegisterTargetedAutomationEvent(bool bRefreshWindow = false)
             catch { }
         }
     }
-    
+
     if(window.Parent != null)
     {
         structureChangedHandler = window.Parent.RegisterStructureChangedEvent(TreeScope.Subtree, AddStructureChangedStep);
@@ -442,21 +408,11 @@ void RegisterTargetedAutomationEvent(bool bRefreshWindow = false)
     return;
 }
 
-Thread hookThread = new Thread(() =>
-{
-    hookThreadId = GetCurrentThreadId();
-    IntPtr mouseHook = SetWindowsHookEx(14, MouseHookCallback, 0, 0);
-    
-    while (GetMessage(out MSG msg, 0, 0, 0) != 0) { }
-
-    UnhookWindowsHookEx(mouseHook);
-});
-hookThread.Start();
-
 Attach2Process();
 RegisterTargetedAutomationEvent();
 Console.ReadKey();
 
+lowLevelRecorder.Stop();
 File.WriteAllText(
     Path.Join(config.stepDirectoryPath, $"step_{DateTime.Now:dd-MM-yyyy_HH-mm-ss}.json"),
     JsonSerializer.Serialize(
@@ -468,30 +424,3 @@ File.WriteAllText(
         }
     )
 );
-
-PostThreadMessage(hookThreadId, 0x0012, 0, 0);
-hookThread.Join();
-
-delegate IntPtr LowLevelMouseProc(int nCode, IntPtr wParam, IntPtr lParam);
-
-[StructLayout(LayoutKind.Sequential)]
-struct MSLLHOOKSTRUCT
-{
-    public System.Drawing.Point pt;
-    public uint mouseData;
-    public uint flags;
-    public uint time;
-    public IntPtr dwExtraInfo;
-}
-
-[StructLayout(LayoutKind.Sequential)]
-struct MSG
-{
-    public IntPtr hwnd;
-    public uint message;
-    public IntPtr wParam;
-    public IntPtr lParam;
-    public uint time;
-    public System.Drawing.Point pt;
-    public uint lPrivate;
-}

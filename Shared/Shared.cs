@@ -76,9 +76,9 @@ public class StepConfig
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public string text { get; set; } = null;
 
-    [DefaultValue(false)]
+    [DefaultValue(null)]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
-    public bool bRightClick { get; set; } = false;
+    public string clickType { get; set; } = null;
 }
 
 public class UserConfig
