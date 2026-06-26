@@ -15,6 +15,8 @@ public class LowLevelRecorder
     private uint hookThreadId = 0;
     private uint previousLeftButtonDownTime = 0;
     private Thread thread;
+    private Action addMouseClickStep = null;
+    private Action setMouseClickStep = null;
 
     public ClickType clickType { get; set; } = default;
     public Point mousePosition { get; set; }
@@ -31,22 +33,21 @@ public class LowLevelRecorder
                 if (mouseLowLevelHook.time - previousLeftButtonDownTime <= GetDoubleClickTime())
                 {
                     previousLeftButtonDownTime = 0;
-                    clickType = ClickType.DoubleLeft;
+                    clickType = ClickType.Double;
+                    setMouseClickStep();
                 }
                 else
                 {
                     previousLeftButtonDownTime = mouseLowLevelHook.time;
                     clickType = ClickType.Left;
+                    Task.Run(() => addMouseClickStep());
                 }
             }
             else if ((int)wParam == 0x0204)
             {
                 clickType = ClickType.Right;
+                Task.Run(() => addMouseClickStep());
             }
-
-            Thread.Sleep(100);
-
-
         }
 
         return 0;
@@ -62,6 +63,14 @@ public class LowLevelRecorder
             UnhookWindowsHookEx(mouseHook);
         });
         thread.Start();
+
+        return;
+    }
+
+    public void SetMouseClickStep(Action _addMouseClickStep, Action _setMouseClickStep)
+    {
+        addMouseClickStep = _addMouseClickStep;
+        setMouseClickStep = _setMouseClickStep;
 
         return;
     }
@@ -103,6 +112,6 @@ public enum ClickType
 {
     None,
     Left,
-    DoubleLeft,
+    Double,
     Right
 }
