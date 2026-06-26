@@ -4,32 +4,31 @@ using FlaUI.Core.EventHandlers;
 using FlaUI.Core.Identifiers;
 using FlaUI.Core.Input;
 using FlaUI.UIA3;
-using System.ComponentModel;
+using Shared;
 using System.Diagnostics;
-using System.Drawing;
 using System.IO;
+using System.Runtime.InteropServices;
 using System.Text.Encodings.Web;
 using System.Text.Json;
-using System.Text.Json.Serialization;
+using YamlDotNet.Serialization;
 
-Window window;
+[DllImport("user32.dll")] static extern IntPtr SetWindowsHookEx(int idHook, LowLevelMouseProc lpfn, IntPtr hMod, uint dwThreadId);
+[DllImport("user32.dll")] static extern bool UnhookWindowsHookEx(IntPtr hhk);
+[DllImport("user32.dll")] static extern int GetMessage(out MSG lpMsg, IntPtr hWnd, uint wMsgFilterMin, uint wMsgFilterMax);
+[DllImport("user32.dll")] static extern bool PostThreadMessage(uint idThread, uint Msg, IntPtr wParam, IntPtr lParam);
+[DllImport("user32.dll")] static extern uint GetDoubleClickTime();
+[DllImport("kernel32.dll")] static extern uint GetCurrentThreadId();
+
+uint hookThreadId = 0;
+uint lastLButtonDownTime = 0;
+
+string configText = File.ReadAllText("config.yml");
+UserConfig config = new DeserializerBuilder().Build().Deserialize<UserConfig>(configText);
+
 FlaUI.Core.Application app;
 using UIA3Automation automation = new();
-
-List<ProcessFilter> listProcessFilter = new()
-{
-    new ProcessFilter
-    {
-        mainWindowTitle = "Microsoft Visual Studio"
-    },
-    new ProcessFilter
-    {
-        mainWindowTitle = "Microsoft Visual Studio",
-        bContains = true
-    },
-};
-
-int processFilterIndex = 0;
+Window window;
+VisualStudioLauncher launcher = new();
 
 List<ControlType> listEventControlType = new()
 {
@@ -45,6 +44,7 @@ List<AutomationEventHandlerBase> listEventHandler = new();
 
 List<ControlType> listStructureChangedControlType = new()
 {
+    ControlType.ListItem,
     ControlType.Menu,
     ControlType.MenuItem
 };
@@ -53,32 +53,11 @@ StructureChangedEventHandlerBase structureChangedHandler = null;
 
 AutomationElement[] arrayPreviousElement;
 List<StepConfig> listStep = new();
-Lock eventLock = new();
 bool bSuppressStructureChangedEvent = false;
 
 void Attach2Process()
 {
-    Process process = null;
-
-    while (process == null)
-    {
-        Thread.Sleep(200);
-        Process[] arrayProcess = Process.GetProcessesByName("devenv");
-        process = arrayProcess.Where(i => !i.MainWindowTitle.Contains("fla-ui-recorder"))
-            .Where(j =>
-            {
-                if (listProcessFilter[processFilterIndex].bContains)
-                {
-                    return j.MainWindowTitle.Contains(listProcessFilter[processFilterIndex].mainWindowTitle);
-                }
-
-                return j.MainWindowTitle == listProcessFilter[processFilterIndex].mainWindowTitle;
-            })
-            .OrderByDescending(k => k.StartTime)
-            .FirstOrDefault();
-    }
-
-    processFilterIndex = processFilterIndex < listProcessFilter.Count - 1 ? processFilterIndex + 1 : processFilterIndex;
+    Process process = launcher.Attach();
     app = FlaUI.Core.Application.Attach(process);
     window = app.GetMainWindow(automation);
     Thread.Sleep(2000);
@@ -159,7 +138,7 @@ string GetXPath(AutomationElement element)
     List<string> listIdNameType = setUniqueIdNameType.First()
         .Split(',')
         .ToList();
-    xPath = $"{xPath[..^1]} and .//{listIdNameType[2]}[@AutomaticId='{listIdNameType[0]}' and @Name='{listIdNameType[1]}']]";
+    xPath = $"{xPath[..^1]} and .//{listIdNameType[2]}[@AutomationId='{listIdNameType[0]}' and @Name='{listIdNameType[1]}']]";
 
     return xPath;
 }
@@ -171,7 +150,7 @@ void AddEventStep(AutomationElement element, EventId eventId)
     string xPath = GetXPath(element);
     bool bRefreshWindow = false;
 
-    if (eventId == automation.EventLibrary.Text.TextChangedEvent && element.IsEnabled)
+    if (eventId == automation.EventLibrary.Text.TextChangedEvent && element.Properties.IsKeyboardFocusable)
     {
         if (listStep.Last().xPath == xPath)
         {
@@ -242,8 +221,6 @@ void AddStructureChangedStep(AutomationElement element, StructureChangeType chan
         return;
     }
 
-    Console.WriteLine("AddStructureChangedStep");
-
     try
     {
         if(element.ControlType != ControlType.Window)
@@ -255,6 +232,12 @@ void AddStructureChangedStep(AutomationElement element, StructureChangeType chan
     {
         return;
     }
+
+    try
+    {
+        Console.WriteLine("AddStructureChangedStep");
+    }
+    catch { }
 
     try
     {
@@ -286,9 +269,9 @@ void AddStructureChangedStep(AutomationElement element, StructureChangeType chan
 
         if(bStructureAdded)
         {
-            if(changedControlType == ControlType.Menu || changedControlType == ControlType.MenuItem)
+            if (changedControlType == ControlType.ListItem || changedControlType == ControlType.Menu || changedControlType == ControlType.MenuItem)
             {
-                Point mousePosition = Mouse.Position;
+                System.Drawing.Point mousePosition = Mouse.Position;
                 int minArea = int.MaxValue;
                 AutomationElement clickedElement = null;
 
@@ -329,6 +312,36 @@ void AddStructureChangedStep(AutomationElement element, StructureChangeType chan
 
     return;
 }
+
+IntPtr MouseHookCallback(int nCode, IntPtr wParam, IntPtr lParam)
+{
+    if (nCode >= 0)
+    {
+        MSLLHOOKSTRUCT hookStruct = Marshal.PtrToStructure<MSLLHOOKSTRUCT>(lParam);
+
+        switch ((int)wParam)
+        {
+            case 0x0201:
+                if (hookStruct.time - lastLButtonDownTime <= GetDoubleClickTime())
+                {
+                    Console.WriteLine($"Double click at {hookStruct.pt}");
+                    lastLButtonDownTime = 0;
+                }
+                else
+                {
+                    Console.WriteLine($"Left click at {hookStruct.pt}");
+                    lastLButtonDownTime = hookStruct.time;
+                }
+                break;
+            case 0x0204:
+                Console.WriteLine($"Right click at {hookStruct.pt}");
+                break;
+        }
+    }
+
+    return 0;
+}
+
 
 void RegisterTargetedAutomationEvent(bool bRefreshWindow = false)
 {
@@ -391,11 +404,6 @@ void RegisterTargetedAutomationEvent(bool bRefreshWindow = false)
                 case ControlType.TabItem:
                     listEventId.Add(automation.EventLibrary.SelectionItem.ElementSelectedEvent);
                     break;
-                /*
-                case ControlType.Menu:
-                    Console.WriteLine($"debug2 {GetXPath(element)}");
-                    break;
-                */
             }
             
             foreach (EventId eventId in listEventId)
@@ -409,6 +417,16 @@ void RegisterTargetedAutomationEvent(bool bRefreshWindow = false)
     foreach(ControlType controlType in dictPreviousStructure.Keys)
     {
         dictPreviousStructure[controlType].Clear();
+
+        foreach(AutomationElement element in arrayPreviousElement.Where(i => i.ControlType == controlType))
+        {
+            try
+            {
+                dictPreviousStructure[controlType].Add($"{element.AutomationId},{element.Name}");
+
+            }
+            catch { }
+        }
     }
     
     if(window.Parent != null)
@@ -424,13 +442,23 @@ void RegisterTargetedAutomationEvent(bool bRefreshWindow = false)
     return;
 }
 
-Process.Start("C:\\Program Files\\Microsoft Visual Studio\\18\\Community\\Common7\\IDE\\devenv.exe");
+Thread hookThread = new Thread(() =>
+{
+    hookThreadId = GetCurrentThreadId();
+    IntPtr mouseHook = SetWindowsHookEx(14, MouseHookCallback, 0, 0);
+    
+    while (GetMessage(out MSG msg, 0, 0, 0) != 0) { }
+
+    UnhookWindowsHookEx(mouseHook);
+});
+hookThread.Start();
+
 Attach2Process();
 RegisterTargetedAutomationEvent();
 Console.ReadKey();
 
 File.WriteAllText(
-    "C:\\fla-ui-recorder\\xPath.json",
+    Path.Join(config.stepDirectoryPath, $"step_{DateTime.Now:dd-MM-yyyy_HH-mm-ss}.json"),
     JsonSerializer.Serialize(
         listStep,
         new JsonSerializerOptions
@@ -441,22 +469,29 @@ File.WriteAllText(
     )
 );
 
-public class ProcessFilter
+PostThreadMessage(hookThreadId, 0x0012, 0, 0);
+hookThread.Join();
+
+delegate IntPtr LowLevelMouseProc(int nCode, IntPtr wParam, IntPtr lParam);
+
+[StructLayout(LayoutKind.Sequential)]
+struct MSLLHOOKSTRUCT
 {
-    public string mainWindowTitle = null;
-    public bool bContains = false;
+    public System.Drawing.Point pt;
+    public uint mouseData;
+    public uint flags;
+    public uint time;
+    public IntPtr dwExtraInfo;
 }
 
-public class StepConfig
+[StructLayout(LayoutKind.Sequential)]
+struct MSG
 {
-    public string controlType { get; set; } = null;
-    public string xPath { get; set; } = null;
-
-    [DefaultValue(null)]
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
-    public string text { get; set; } = null;
-
-    [DefaultValue(false)]
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
-    public bool bRightClick { get; set; } = false;
+    public IntPtr hwnd;
+    public uint message;
+    public IntPtr wParam;
+    public IntPtr lParam;
+    public uint time;
+    public System.Drawing.Point pt;
+    public uint lPrivate;
 }

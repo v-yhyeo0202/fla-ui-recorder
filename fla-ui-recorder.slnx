@@ -1,3 +1,6 @@
 <Solution>
-  <Project Path="console-app/recorder.csproj" />
+  <Project Path="console-app/Recorder.csproj" />
+  <Project Path="MessageBox/MessageBox.csproj" Id="d292b1a6-a69c-41ba-9c63-47de42ebcf4b" />
+  <Project Path="Playback/Playback.csproj" Id="4efe90a2-bd95-4315-8381-dc09910e5fec" />
+  <Project Path="Shared/Shared.csproj" Id="329168c3-1b26-4502-ad05-e10668690364" />
 </Solution>

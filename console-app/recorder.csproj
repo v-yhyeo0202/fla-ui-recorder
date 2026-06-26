@@ -11,6 +11,14 @@
 
   <ItemGroup>
     <PackageReference Include="FlaUI.UIA3" Version="5.0.0" />
+    <PackageReference Include="YamlDotNet" Version="18.0.0" />
+	<ProjectReference Include="..\Shared\Shared.csproj" Label="Shared" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update="config.yml">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
   </ItemGroup>
 
 </Project>
