@@ -398,16 +398,16 @@ public class Recorder
 
     public void Pause()
     {
-        ClearKeyPressEventHandler();
         lowLevelRecorder.Unhook();
+        ClearKeyPressEventHandler();
 
         return;
     }
 
     public async Task StopAsync()
     {
-        ClearKeyPressEventHandler();
         lowLevelRecorder.Stop();
+        ClearKeyPressEventHandler();
         automation.Dispose();
 
         string stepName = string.IsNullOrEmpty(recorderConfig.stepName) ? "" : $"_{recorderConfig.stepName}";
