@@ -1,7 +1,7 @@
 <Solution>
   <Project Path="console-app/Recorder.csproj" />
-  <Project Path="MessageBox/MessageBox.csproj" Id="d292b1a6-a69c-41ba-9c63-47de42ebcf4b" />
   <Project Path="Playback/Playback.csproj" Id="4efe90a2-bd95-4315-8381-dc09910e5fec" />
   <Project Path="RecorderUI/RecorderUI.csproj" Id="b8fb5a06-123f-4b97-8845-5defeefa3859" />
-  <Project Path="Shared/Shared.csproj" Id="329168c3-1b26-4502-ad05-e10668690364" />
+  <Project Path="Shared/Shared.csproj" Id="cb89ed66-82ed-42df-b01b-6c4e05323189" />
+  <Project Path="SourceGenerator/SourceGenerator.csproj" Id="fc329a68-61d9-4a6e-a5e3-cf82f201a030" />
 </Solution>

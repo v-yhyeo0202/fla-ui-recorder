@@ -1,0 +1,74 @@
+﻿<UserControl x:Class="RecorderUI.View.RecordView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
+             xmlns:local="clr-namespace:RecorderUI.View"
+             xmlns:behaviors="http://schemas.microsoft.com/xaml/behaviors"
+             xmlns:system="clr-namespace:System;assembly=mscorlib" 
+             mc:Ignorable="d" 
+             d:DesignHeight="450" d:DesignWidth="800">
+    <UserControl.Resources>
+        <system:Double x:Key="buttonHeight">30</system:Double>
+        <system:Double x:Key="buttonWidth">80</system:Double>
+    </UserControl.Resources>
+    <StackPanel
+        Orientation="Vertical">
+        <StackPanel
+            Height="5"
+            Width="160"
+            HorizontalAlignment="Center"
+            Background="LightGreen"
+            Visibility="{Binding indicatorVisible}">
+            <behaviors:Interaction.Triggers>
+                <behaviors:EventTrigger
+                    EventName="MouseEnter">
+                    <behaviors:InvokeCommandAction
+                        Command="{Binding ShowRecorderPanelCommand}">
+                        <behaviors:InvokeCommandAction.CommandParameter>
+                            <system:Boolean>
+                                True
+                            </system:Boolean>
+                        </behaviors:InvokeCommandAction.CommandParameter>
+                    </behaviors:InvokeCommandAction>
+                </behaviors:EventTrigger>
+            </behaviors:Interaction.Triggers>
+        </StackPanel>
+        
+        <StackPanel
+            Orientation="Horizontal"
+            HorizontalAlignment="Center"
+            Visibility="{Binding recorderPanelVisible}">
+            <behaviors:Interaction.Triggers>
+                <behaviors:EventTrigger
+                    EventName="MouseLeave">
+                    <behaviors:InvokeCommandAction
+                        Command="{Binding ShowRecorderPanelCommand}">
+                        <behaviors:InvokeCommandAction.CommandParameter>
+                            <system:Boolean>
+                                False
+                            </system:Boolean>
+                        </behaviors:InvokeCommandAction.CommandParameter>
+                    </behaviors:InvokeCommandAction>
+                </behaviors:EventTrigger>
+            </behaviors:Interaction.Triggers>
+            <Button
+                Height="{StaticResource buttonHeight}"
+                Width="{StaticResource buttonWidth}"
+                Visibility="{Binding recordVisible}"
+                Content="⏺️ Record"
+                Command="{Binding RecordCommand}"/>
+            <Button
+                Height="{StaticResource buttonHeight}"
+                Width="{StaticResource buttonWidth}"
+                Visibility="{Binding pauseVisible}"
+                Command="{Binding PauseCommand}"
+                Content="⏸️ Pause"/>
+            <Button
+                Height="{StaticResource buttonHeight}"
+                Width="{StaticResource buttonWidth}"
+                Command="{Binding StopCommand}"
+                Content="⏹️ Stop"/>
+        </StackPanel>
+    </StackPanel>
+</UserControl>

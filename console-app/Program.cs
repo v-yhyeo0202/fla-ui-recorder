@@ -4,7 +4,6 @@ using FlaUI.Core.Definitions;
 using FlaUI.Core.EventHandlers;
 using FlaUI.Core.Identifiers;
 using FlaUI.UIA3;
-using Shared;
 using System.Diagnostics;
 using System.IO;
 using System.Text.Encodings.Web;
