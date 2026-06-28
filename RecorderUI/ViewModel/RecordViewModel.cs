@@ -1,4 +1,6 @@
-﻿using RecorderUI.Core;
+﻿using RecorderUI.Component;
+using RecorderUI.Core;
+using RecorderUI.Service;
 using System.Windows;
 using System.Windows.Input;
 
@@ -6,6 +8,7 @@ namespace RecorderUI.ViewModel;
 
 public class RecordViewModel : BaseViewModel
 {
+    private Recorder recorder;
     private MainWindow mainWindow;
     private double collapsedWindowHeight = 5;
     private double expandedWindowHeight = 30;
@@ -26,7 +29,7 @@ public class RecordViewModel : BaseViewModel
     public ICommand ShowRecorderPanelCommand { get; }
     public ICommand RecordCommand { get; }
     public ICommand PauseCommand { get; }
-    public ICommand StopCommand { get; }
+    public ICommand StopAsyncCommand { get; }
 
     public void ShowRecorderPanel(object parameter)
     {
@@ -50,6 +53,7 @@ public class RecordViewModel : BaseViewModel
 
     public void Record(object parameter)
     {
+        recorder.Record();
         recordVisible = Visibility.Collapsed;
         pauseVisible = Visibility.Visible;
 
@@ -57,14 +61,16 @@ public class RecordViewModel : BaseViewModel
     }
     public void Pause(object parameter)
     {
+        recorder.Pause();
         recordVisible = Visibility.Visible;
         pauseVisible = Visibility.Collapsed;
 
         return;
     }
 
-    public void Stop(object parameter)
+    public async Task StopAsync(object parameter)
     {
+        await recorder.StopAsync();
         mainWindow.WindowStyle = WindowStyle.SingleBorderWindow;
         mainWindow.ResizeMode = ResizeMode.CanResize;
         mainWindow.Topmost = false;
@@ -78,12 +84,9 @@ public class RecordViewModel : BaseViewModel
         return;
     }
 
-    public RecordViewModel()
+    public RecordViewModel(RecorderConfig recorderConfig, List<AttacherConfig> listAttacherConfig)
     {
-        ShowRecorderPanelCommand = new RelayCommand(ShowRecorderPanel);
-        RecordCommand = new RelayCommand(Record);
-        PauseCommand = new RelayCommand(Pause);
-        StopCommand = new RelayCommand(Stop);
+        recorder = new Recorder(recorderConfig, listAttacherConfig);
 
         mainWindow = ((App)Application.Current).mainWindow;
         mainWindow.WindowStyle = WindowStyle.None;
@@ -93,6 +96,11 @@ public class RecordViewModel : BaseViewModel
         mainWindow.Left = (SystemParameters.PrimaryScreenWidth - windowWidth) / 2;
         mainWindow.Height = collapsedWindowHeight;
         mainWindow.Width = windowWidth;
+
+        ShowRecorderPanelCommand = new RelayCommand(ShowRecorderPanel);
+        RecordCommand = new RelayCommand(Record);
+        PauseCommand = new RelayCommand(Pause);
+        StopAsyncCommand = new RelayCommandAsync(StopAsync);
 
         return;
     }
