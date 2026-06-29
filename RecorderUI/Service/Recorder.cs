@@ -4,6 +4,7 @@ using FlaUI.Core.EventHandlers;
 using FlaUI.Core.Identifiers;
 using FlaUI.UIA3;
 using RecorderUI.Component;
+using RecorderUI.ViewModel;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
@@ -16,6 +17,7 @@ namespace RecorderUI.Service;
 public class Recorder
 {
     private RecorderConfig recorderConfig;
+    private RecordViewModel recordViewModel;
     private FlaUI.Core.Application app;
     private UIA3Automation automation;
     private Window window;
@@ -33,6 +35,7 @@ public class Recorder
     private List<ControlType> listClickableControlType = new()
     {
         ControlType.Button,
+        ControlType.ComboBox,
         ControlType.DataItem,
         ControlType.ListItem,
         ControlType.MenuItem,
@@ -46,13 +49,15 @@ public class Recorder
     };
     private AutomationElement[] arrayPreviousEvaluableElement;
     private List<StepConfig> listStep = new();
+    private bool bStop = false;
+    private static readonly SemaphoreSlim stopLock = new SemaphoreSlim(1, 1);
 
-    public void Attach2Process()
+    public async Task Attach2ProcessAsync()
     {
         Process process = processManager.GetTargetedProcess();
         app = FlaUI.Core.Application.Attach(process);
         window = app.GetMainWindow(automation);
-        Thread.Sleep(2000);
+        await Task.Delay(2000);
 
         return;
     }
@@ -153,6 +158,19 @@ public class Recorder
 
         return xPath;
     }
+    
+    public void ShowWaitMessage(bool bShow = true)
+    {
+        Task.Run(() =>
+        {
+            System.Windows.Application.Current.Dispatcher.Invoke(() =>
+            {
+                recordViewModel.ShowWaitMessage(bShow);
+            });
+        });
+
+        return;
+    }
 
     public void AddKeyPressStep(AutomationElement element, EventId eventId)
     {
@@ -177,8 +195,8 @@ public class Recorder
             }
         }
 
-        RegisterAutomationEvent(100);
-
+        Task.Run(() => RegisterAutomationEventAsync(100));
+        
         foreach (StepConfig step in listStep)
         {
             Trace.WriteLine($"debug0 {step.controlType}; {step.xPath}; {step.text}; {step.clickType}");
@@ -210,13 +228,16 @@ public class Recorder
         return mousePointedElement;
     }
 
-    public void AddMouseClickStep()
+    public async Task AddMouseClickStepAsync()
     {
-        AutomationElement element = GetMousePointedElement(arrayPreviousClickableElement);
+        lowLevelRecorder.bRecord = false;
+        AutomationElement element = await Task.Run(() => GetMousePointedElement(arrayPreviousClickableElement));
+        Trace.WriteLine("debug6");
 
         if (element != null)
         {
-            string xPath = GetXPath(element);
+            Trace.WriteLine("debug7");
+            string xPath = await Task.Run(() => GetXPath(element));
             ClickType clickType = lowLevelRecorder.clickType;
             listStep.Add(new StepConfig
             {
@@ -226,23 +247,37 @@ public class Recorder
             });
         }
 
-        RegisterAutomationEvent();
+        await stopLock.WaitAsync();
 
-        foreach (StepConfig step in listStep)
+        try
         {
-            Trace.WriteLine($"debug0 {step.controlType}; {step.xPath}; {step.text}; {step.clickType}");
+            ShowWaitMessage();
+            await RegisterAutomationEventAsync();
+            lowLevelRecorder.bRecord = true;
+            ShowWaitMessage(false);
+
+            foreach (StepConfig step in listStep)
+            {
+                Trace.WriteLine($"debug0 {step.controlType}; {step.xPath}; {step.text}; {step.clickType}");
+            }
+        }
+        finally
+        {
+            stopLock.Release();
         }
 
         return;
     }
 
-    public void AddEvaluationStep()
+    public async Task AddEvaluationStepAsync()
     {
-        AutomationElement element = GetMousePointedElement(arrayPreviousEvaluableElement);
+        lowLevelRecorder.bRecord = false;
+        ShowWaitMessage();
+        AutomationElement element = await Task.Run(() => GetMousePointedElement(arrayPreviousEvaluableElement));
 
         if (element != null)
         {
-            string xPath = GetXPath(element);
+            string xPath = await Task.Run(() => GetXPath(element));
             listStep.Add(new StepConfig
             {
                 controlType = element.ControlType.ToString(),
@@ -251,6 +286,10 @@ public class Recorder
                 bEvaluation = true
             });
         }
+
+        await Task.Delay(1000);
+        lowLevelRecorder.bRecord = true;
+        ShowWaitMessage(false);
 
         foreach (StepConfig step in listStep)
         {
@@ -301,7 +340,7 @@ public class Recorder
         return arrayElement;
     }
 
-    public void RegisterAutomationEvent(int sleepTime = 1500)
+    public async Task RegisterAutomationEventAsync(int sleepTime = 1500)
     {
         try
         {
@@ -315,10 +354,10 @@ public class Recorder
         catch
         {
             listKeyPressEventHandler.Clear();
-            Attach2Process();
+            await Attach2ProcessAsync();
         }
 
-        Thread.Sleep(sleepTime);
+        await Task.Delay(sleepTime);
 
         window = app.GetMainWindow(automation);
         arrayPreviousKeyPressElement = window.FindAllDescendants();
@@ -355,24 +394,33 @@ public class Recorder
         return;
     }
 
-    public Recorder(RecorderConfig _recorderConfig, List<AttacherConfig> listAttacherConfig)
+    public async Task InitAsync()
     {
-        recorderConfig = _recorderConfig;
-        automation = new UIA3Automation();
-        processManager = new ProcessManager(recorderConfig, listAttacherConfig);
-        lowLevelRecorder = new LowLevelRecorder();
-
-        Attach2Process();
-        RegisterAutomationEvent();
-        lowLevelRecorder.SetStep(AddMouseClickStep, SetMouseClickStep, AddEvaluationStep);
+        ShowWaitMessage();
+        await Attach2ProcessAsync();
+        await RegisterAutomationEventAsync();
+        lowLevelRecorder = new LowLevelRecorder(AddMouseClickStepAsync, SetMouseClickStep, AddEvaluationStepAsync, this);
+        ShowWaitMessage(false);
 
         return;
     }
 
-    public void Record()
+    public Recorder(RecorderConfig _recorderConfig, List<AttacherConfig> listAttacherConfig, RecordViewModel _recordViewModel)
     {
-        lowLevelRecorder.Hook();
-        RegisterAutomationEvent();
+        recorderConfig = _recorderConfig;
+        recordViewModel = _recordViewModel;
+
+        automation = new UIA3Automation();
+        processManager = new ProcessManager(recorderConfig, listAttacherConfig);
+        Task.Run(() => InitAsync());
+
+        return;
+    }
+
+    public async Task RecordAsync()
+    {
+        lowLevelRecorder.bRecord = true;
+        await RegisterAutomationEventAsync();
 
         return;
     }
@@ -398,7 +446,7 @@ public class Recorder
 
     public void Pause()
     {
-        lowLevelRecorder.Unhook();
+        lowLevelRecorder.bRecord = false;
         ClearKeyPressEventHandler();
 
         return;
@@ -406,9 +454,19 @@ public class Recorder
 
     public async Task StopAsync()
     {
-        lowLevelRecorder.Stop();
-        ClearKeyPressEventHandler();
-        automation.Dispose();
+        await stopLock.WaitAsync();
+
+        try
+        {
+            lowLevelRecorder.Stop();
+            ClearKeyPressEventHandler();
+            automation.Dispose();
+            processManager.Kill();
+        }
+        finally
+        {
+            stopLock.Release();
+        }
 
         string stepName = string.IsNullOrEmpty(recorderConfig.stepName) ? "" : $"_{recorderConfig.stepName}";
         await File.WriteAllTextAsync(

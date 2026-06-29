@@ -16,10 +16,17 @@
 
     <ScrollViewer
         MaxHeight="400"
-        VerticalScrollBarVisibility="Auto">
+        VerticalScrollBarVisibility="Auto"
+        Background="White">
         <StackPanel
             Orientation="Vertical"
             Margin="20 5 20 5">
+            <TextBlock
+                Margin="5"
+                Text="Fla UI Recorder"
+                FontSize="20"
+                FontWeight="Bold"/>
+            <Separator/>
             <TextBlock
                 Margin="5"
                 Text="Recorder configuration"
@@ -56,6 +63,13 @@
                 Visibility="{Binding removeAttacherVisible}"
                 Content="Remove attacher"
                 Command="{Binding RemoveAttacherCommand}"/>
+            <Button
+                HorizontalAlignment="Right"
+                Height="20"
+                Width="100"
+                Margin="5"
+                Content="Close"
+                Command="{Binding CloseCommand}"/>
         </StackPanel>
     </ScrollViewer>
 </UserControl>

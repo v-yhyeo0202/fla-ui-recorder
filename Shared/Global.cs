@@ -29,7 +29,8 @@ public static class Global
                         new()
                         {
                             displayName = "Attacher configuration path",
-                            formType = FormType.PathForm
+                            formType = FormType.PathForm,
+                            bPostSearchPath = true
                         }
                     },
                     {

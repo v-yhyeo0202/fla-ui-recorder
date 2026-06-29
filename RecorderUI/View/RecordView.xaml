@@ -13,12 +13,14 @@
         <system:Double x:Key="buttonWidth">80</system:Double>
     </UserControl.Resources>
     <StackPanel
-        Orientation="Vertical">
+        VerticalAlignment="Center"
+        Orientation="Vertical"
+        Background="#80FFFFFF">
         <StackPanel
             Height="5"
             Width="160"
             HorizontalAlignment="Center"
-            Background="LightGreen"
+            Background="White"
             Visibility="{Binding indicatorVisible}">
             <behaviors:Interaction.Triggers>
                 <behaviors:EventTrigger
@@ -34,7 +36,7 @@
                 </behaviors:EventTrigger>
             </behaviors:Interaction.Triggers>
         </StackPanel>
-        
+
         <StackPanel
             Orientation="Horizontal"
             HorizontalAlignment="Center"
@@ -57,7 +59,7 @@
                 Width="{StaticResource buttonWidth}"
                 Visibility="{Binding recordVisible}"
                 Content="⏺️ Record"
-                Command="{Binding RecordCommand}"/>
+                Command="{Binding RecordAsyncCommand}"/>
             <Button
                 Height="{StaticResource buttonHeight}"
                 Width="{StaticResource buttonWidth}"
@@ -70,5 +72,19 @@
                 Command="{Binding StopAsyncCommand}"
                 Content="⏹️ Stop"/>
         </StackPanel>
+
+        <Grid
+            Height="{Binding waitMessageHeight}"
+            Width="{Binding waitMessageWidth}"
+            Visibility="{Binding waitMessageVisible}">
+            <TextBlock
+                HorizontalAlignment="Center"
+                VerticalAlignment="Center"
+                Width="600"
+                FontSize="20"
+                Text="Please wait for application to finish loading."
+                TextAlignment="Center"
+                TextWrapping="Wrap"/>
+        </Grid>
     </StackPanel>
 </UserControl>

@@ -1,6 +1,7 @@
 ﻿using RecorderUI.Component;
 using RecorderUI.Core;
 using RecorderUI.Service;
+using System.Diagnostics;
 using System.Windows;
 using System.Windows.Input;
 
@@ -26,8 +27,17 @@ public class RecordViewModel : BaseViewModel
     private Visibility _pauseVisible = Visibility.Visible;
     public Visibility pauseVisible { get { return _pauseVisible; } set { _pauseVisible = value; OnPropertyChanged(nameof(pauseVisible)); } }
 
+    private double _waitMessageHeight = SystemParameters.PrimaryScreenHeight;
+    public double waitMessageHeight { get { return _waitMessageHeight; } set { _waitMessageHeight = value; OnPropertyChanged(nameof(waitMessageHeight)); } }
+
+    private double _waitMessageWidth = SystemParameters.PrimaryScreenWidth;
+    public double waitMessageWidth { get { return _waitMessageWidth; } set { _waitMessageWidth = value; OnPropertyChanged(nameof(waitMessageWidth)); } }
+
+    private Visibility _waitMessageVisible = Visibility.Collapsed;
+    public Visibility waitMessageVisible { get { return _waitMessageVisible; } set { _waitMessageVisible = value; OnPropertyChanged(nameof(waitMessageVisible)); } }
+
     public ICommand ShowRecorderPanelCommand { get; }
-    public ICommand RecordCommand { get; }
+    public ICommand RecordAsyncCommand { get; }
     public ICommand PauseCommand { get; }
     public ICommand StopAsyncCommand { get; }
 
@@ -51,9 +61,9 @@ public class RecordViewModel : BaseViewModel
         return;
     }
 
-    public void Record(object parameter)
+    public async Task RecordAsync(object parameter)
     {
-        recorder.Record();
+        await recorder.RecordAsync();
         recordVisible = Visibility.Collapsed;
         pauseVisible = Visibility.Visible;
 
@@ -71,7 +81,6 @@ public class RecordViewModel : BaseViewModel
     public async Task StopAsync(object parameter)
     {
         await recorder.StopAsync();
-        mainWindow.WindowStyle = WindowStyle.SingleBorderWindow;
         mainWindow.ResizeMode = ResizeMode.CanResize;
         mainWindow.Topmost = false;
         mainWindow.Top = (SystemParameters.PrimaryScreenHeight - 450) / 2;
@@ -86,8 +95,7 @@ public class RecordViewModel : BaseViewModel
 
     public RecordViewModel(RecorderConfig recorderConfig, List<AttacherConfig> listAttacherConfig)
     {
-        recorder = new Recorder(recorderConfig, listAttacherConfig);
-
+        recorder = new Recorder(recorderConfig, listAttacherConfig, this);
         mainWindow = ((App)Application.Current).mainWindow;
         mainWindow.WindowStyle = WindowStyle.None;
         mainWindow.ResizeMode = ResizeMode.NoResize;
@@ -98,9 +106,38 @@ public class RecordViewModel : BaseViewModel
         mainWindow.Width = windowWidth;
 
         ShowRecorderPanelCommand = new RelayCommand(ShowRecorderPanel);
-        RecordCommand = new RelayCommand(Record);
+        RecordAsyncCommand = new RelayCommandAsync(RecordAsync);
         PauseCommand = new RelayCommand(Pause);
         StopAsyncCommand = new RelayCommandAsync(StopAsync);
+
+        return;
+    }
+
+    public void ShowWaitMessage(bool bShow = true)
+    {
+        try
+        {
+            if (bShow)
+            {
+                mainWindow.Left = 0;
+                mainWindow.Height = SystemParameters.PrimaryScreenHeight;
+                mainWindow.Width = SystemParameters.PrimaryScreenWidth;
+                waitMessageVisible = Visibility.Visible;
+                recorderPanelVisible = Visibility.Collapsed;
+            }
+            else
+            {
+                mainWindow.Left = (SystemParameters.PrimaryScreenWidth - windowWidth) / 2;
+                mainWindow.Height = collapsedWindowHeight;
+                mainWindow.Width = windowWidth;
+                waitMessageVisible = Visibility.Collapsed;
+                recorderPanelVisible = Visibility.Visible;
+            }
+        }
+        catch(Exception e)
+        {
+            Trace.WriteLine(e.Message);
+        }
 
         return;
     }

@@ -8,7 +8,10 @@
         xmlns:viewModel="clr-namespace:RecorderUI.ViewModel"
         mc:Ignorable="d"
         Title="FlaUI recorder" Height="450" Width="800"
-        WindowStartupLocation="CenterScreen">
+        WindowStartupLocation="CenterScreen"
+        WindowStyle="None"
+        AllowsTransparency="True"
+        Background="Transparent">
     <StackPanel>
         <ContentControl Content="{Binding currentViewModel}">
             <ContentControl.Resources>

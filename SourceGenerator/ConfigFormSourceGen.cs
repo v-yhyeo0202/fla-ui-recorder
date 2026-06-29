@@ -213,7 +213,8 @@ public class ConfigFormSourceGen : IIncrementalGenerator
                         $$"""
                                         bFilePath = {{(Global.dictFormConfig[className].dictPropertyConfig[propertyName].bFilePath ? "true" : "false")}},
                                         bSave = {{(Global.dictFormConfig[className].dictPropertyConfig[propertyName].bSave ? "true" : "false")}},
-                                        formDependency = formDependency,
+                                        bPostSearchPath = {{(Global.dictFormConfig[className].dictPropertyConfig[propertyName].bPostSearchPath ? "true" : "false")}},
+                                        formDependency = formDependency
 
                         """);
                 }

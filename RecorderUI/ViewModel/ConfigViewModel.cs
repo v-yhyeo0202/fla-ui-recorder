@@ -1,7 +1,5 @@
 ﻿using RecorderUI.Component;
 using RecorderUI.Core;
-using System.Diagnostics;
-using System.Printing;
 using System.Windows;
 using System.Windows.Input;
 
@@ -28,6 +26,7 @@ public class ConfigViewModel : BaseViewModel
     public ICommand Navigate2RecordCommand { get; }
     public ICommand AddAttacherCommand { get; }
     public ICommand RemoveAttacherCommand { get; }
+    public ICommand CloseCommand { get; }
 
     public void SetAttacherConfig(string configPath)
     {
@@ -57,7 +56,9 @@ public class ConfigViewModel : BaseViewModel
 
     public void Navigate2Record(object parameter)
     {
-        ((App)Application.Current).mainViewModel.Navigate(new RecordViewModel(), this);
+        RecorderConfig recorderConfig = recorderConfigForm.GetInput()[0];
+        List<AttacherConfig> listAttacherConfig = attacherConfigForm.GetInput();
+        ((App)Application.Current).mainViewModel.Navigate(new RecordViewModel(recorderConfig, listAttacherConfig), this);
 
         return;
     }
@@ -82,6 +83,13 @@ public class ConfigViewModel : BaseViewModel
         return;
     }
 
+    public void Close(object parameter)
+    {
+        Application.Current.Shutdown();
+
+        return;
+    }
+
     public ConfigViewModel()
     {
         utility = new Utility();
@@ -91,6 +99,7 @@ public class ConfigViewModel : BaseViewModel
             Navigate2RecordCommand = new RelayCommand(Navigate2Record);
             AddAttacherCommand = new RelayCommand(AddAttacher);
             RemoveAttacherCommand = new RelayCommand(RemoveAttacher);
+            CloseCommand = new RelayCommand(Close);
 
             recorderConfigForm = new RecorderConfigForm(_formDependency: new RecorderConfigFormDependency(SetAttacherConfig, Navigate2RecordCommand));
             attacherConfigForm = new AttacherConfigForm(_formDependency: new AttacherConfigFormDependency(UpdateRecorderAttacherConfigPath));

@@ -22,6 +22,7 @@ public class FormPropertyConfig
     public int labelWidth = 0;
     public bool bFilePath = true;
     public bool bSave = false;
+    public bool bPostSearchPath = false;
 }
 
 public class FormConfig

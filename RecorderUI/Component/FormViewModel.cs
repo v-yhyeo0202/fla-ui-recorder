@@ -107,6 +107,7 @@ public class PathForm : BaseForm
     private Utility utility;
     public bool bFilePath;
     public bool bSave;
+    public bool bPostSearchPath;
     public IFormDependency formDependency;
     private string _input = null;
     public string input { get { return _input; } set { _input = value; OnPropertyChanged(nameof(input)); } }
@@ -152,7 +153,10 @@ public class PathForm : BaseForm
         {
             try
             {
-                formDependency.PostSearchPath(input);
+                if(bPostSearchPath && !string.IsNullOrEmpty(input))
+                {
+                    formDependency.PostSearchPath(input);
+                }
             }
             catch (Exception e)
             {
