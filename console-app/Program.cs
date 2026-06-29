@@ -1,4 +1,4 @@
-﻿using console_app;
+﻿using Recorder;
 using FlaUI.Core.AutomationElements;
 using FlaUI.Core.Definitions;
 using FlaUI.Core.EventHandlers;
@@ -10,13 +10,12 @@ using System.Text.Encodings.Web;
 using System.Text.Json;
 using YamlDotNet.Serialization;
 
-string configText = File.ReadAllText("config.yml");
-UserConfig config = new DeserializerBuilder().Build().Deserialize<UserConfig>(configText);
+RecorderConfig recorderConfig = new DeserializerBuilder().Build().Deserialize<RecorderConfig>(File.ReadAllText("config.yml"));
 
 FlaUI.Core.Application app;
 using UIA3Automation automation = new();
 Window window;
-VisualStudioLauncher launcher = new();
+ProcessManager processManager = new();
 LowLevelRecorder lowLevelRecorder = new();
 
 List<ControlType> listKeyPressControlType = new()
@@ -30,6 +29,7 @@ AutomationElement[] arrayPreviousKeyPressElement;
 List<ControlType> listClickableControlType = new()
 {
     ControlType.Button,
+    ControlType.ComboBox,
     ControlType.DataItem,
     ControlType.ListItem,
     ControlType.MenuItem,
@@ -46,7 +46,7 @@ List<StepConfig> listStep = new();
 
 void Attach2Process()
 {
-    Process process = launcher.Attach();
+    Process process = processManager.GetSequentialProcess();
     app = FlaUI.Core.Application.Attach(process);
     Thread.Sleep(2000);
     window = app.GetMainWindow(automation);
@@ -207,6 +207,8 @@ AutomationElement GetMousePointedElement(AutomationElement[] arrayElement)
 
 void AddMouseClickStep()
 {
+    Console.WriteLine("Click detected, please wait");
+    lowLevelRecorder.bRecord = false;
     AutomationElement element = GetMousePointedElement(arrayPreviousClickableElement);
 
     if (element != null)
@@ -222,6 +224,7 @@ void AddMouseClickStep()
     }
 
     RegisterAutomationEvent();
+    lowLevelRecorder.bRecord = true;
 
     foreach (StepConfig step in listStep)
     {
@@ -283,7 +286,7 @@ AutomationElement[] GetPreviousDesktopElement(List<ControlType> listControlType)
             try
             {
                 string dummy = $"{k.AutomationId},{k.Name},{k.ControlType}";
-                // Console.WriteLine($"debug1 {dummy}");
+                Console.WriteLine($"debug2 {dummy}");
                 return !k.IsOffscreen && listControlType.Contains(k.ControlType);
             }
             catch
@@ -296,7 +299,7 @@ AutomationElement[] GetPreviousDesktopElement(List<ControlType> listControlType)
     return arrayElement;
 }
 
-void RegisterAutomationEvent(int sleepTime = 1500)
+void RegisterAutomationEvent(int sleepTime = 2000)
 {
     try
     {
@@ -342,6 +345,15 @@ void RegisterAutomationEvent(int sleepTime = 1500)
         }
     }
 
+    Console.WriteLine("\nPlease continue");
+
+    if(listKeyPressEventHandler.Count == 0)
+    {
+        Console.WriteLine("You may want to press right `ctrl` key for refreshing");
+    }
+
+    Console.WriteLine();
+
     /*
     Thread.Sleep(3000);
     Console.WriteLine("\n\n");
@@ -350,14 +362,33 @@ void RegisterAutomationEvent(int sleepTime = 1500)
     return;
 }
 
+Console.WriteLine("Please wait");
+
 Attach2Process();
 RegisterAutomationEvent();
-lowLevelRecorder.SetStep(AddMouseClickStep, SetMouseClickStep, AddEvaluationStep);
+lowLevelRecorder.SetStep(AddMouseClickStep, SetMouseClickStep, AddEvaluationStep, RegisterAutomationEvent);
+lowLevelRecorder.bRecord = true;
 Console.ReadKey();
 
 lowLevelRecorder.Stop();
+
+try
+{
+    foreach (AutomationEventHandlerBase eventHandler in listKeyPressEventHandler)
+    {
+        eventHandler.Dispose();
+    }
+
+    listKeyPressEventHandler.Clear();
+}
+catch
+{
+    listKeyPressEventHandler.Clear();
+}
+
+string stepName = string.IsNullOrEmpty(recorderConfig.stepName) ? "" : $"_{recorderConfig.stepName}";
 File.WriteAllText(
-    Path.Join(config.stepDirectoryPath, $"step_{DateTime.Now:dd-MM-yyyy_HH-mm-ss}.json"),
+    Path.Join(recorderConfig.stepDirectoryPath, $"step{stepName}_{DateTime.Now:dd-MM-yyyy_HH-mm-ss}.json"),
     JsonSerializer.Serialize(
         listStep,
         new JsonSerializerOptions
@@ -367,3 +398,4 @@ File.WriteAllText(
         }
     )
 );
+processManager.Kill();

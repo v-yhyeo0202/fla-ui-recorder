@@ -49,12 +49,11 @@ public class Recorder
     };
     private AutomationElement[] arrayPreviousEvaluableElement;
     private List<StepConfig> listStep = new();
-    private bool bStop = false;
     private static readonly SemaphoreSlim stopLock = new SemaphoreSlim(1, 1);
 
     public async Task Attach2ProcessAsync()
     {
-        Process process = processManager.GetTargetedProcess();
+        Process process = processManager.GetSequentialProcess();
         app = FlaUI.Core.Application.Attach(process);
         window = app.GetMainWindow(automation);
         await Task.Delay(2000);
@@ -230,28 +229,26 @@ public class Recorder
 
     public async Task AddMouseClickStepAsync()
     {
-        lowLevelRecorder.bRecord = false;
-        AutomationElement element = await Task.Run(() => GetMousePointedElement(arrayPreviousClickableElement));
-        Trace.WriteLine("debug6");
-
-        if (element != null)
-        {
-            Trace.WriteLine("debug7");
-            string xPath = await Task.Run(() => GetXPath(element));
-            ClickType clickType = lowLevelRecorder.clickType;
-            listStep.Add(new StepConfig
-            {
-                controlType = element.ControlType.ToString(),
-                xPath = xPath,
-                clickType = clickType == ClickType.Left ? null : clickType.ToString()
-            });
-        }
-
         await stopLock.WaitAsync();
 
         try
         {
+            lowLevelRecorder.bRecord = false;
             ShowWaitMessage();
+            AutomationElement element = await Task.Run(() => GetMousePointedElement(arrayPreviousClickableElement));
+
+            if (element != null)
+            {
+                string xPath = await Task.Run(() => GetXPath(element));
+                ClickType clickType = lowLevelRecorder.clickType;
+                listStep.Add(new StepConfig
+                {
+                    controlType = element.ControlType.ToString(),
+                    xPath = xPath,
+                    clickType = clickType == ClickType.Left ? null : clickType.ToString()
+                });
+            }
+
             await RegisterAutomationEventAsync();
             lowLevelRecorder.bRecord = true;
             ShowWaitMessage(false);
@@ -454,13 +451,17 @@ public class Recorder
 
     public async Task StopAsync()
     {
+        Trace.WriteLine("debug4");
         await stopLock.WaitAsync();
 
         try
         {
+            Trace.WriteLine("debug5");
             lowLevelRecorder.Stop();
+            Trace.WriteLine("debug6");
             ClearKeyPressEventHandler();
             automation.Dispose();
+            Trace.WriteLine("debug7");
             processManager.Kill();
         }
         finally

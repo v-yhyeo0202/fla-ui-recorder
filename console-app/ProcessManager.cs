@@ -1,20 +1,18 @@
-﻿using RecorderUI.Component;
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.IO;
+using YamlDotNet.Serialization;
 
-namespace RecorderUI.Service;
+namespace Recorder;
 
 public class ProcessManager
 {
     private RecorderConfig recorderConfig;
-    private List<AttacherConfig> listAttacherConfig;
     private int attacherIndex;
     private Process process;
 
-    public ProcessManager(RecorderConfig _recorderConfig, List<AttacherConfig> _listAttacherConfig)
+    public ProcessManager()
     {
-        recorderConfig = _recorderConfig;
-        listAttacherConfig = _listAttacherConfig;
+        recorderConfig = new DeserializerBuilder().Build().Deserialize<RecorderConfig>(File.ReadAllText("config.yml"));
         attacherIndex = 0;
         process = Process.Start(recorderConfig.applicationPath);
 
@@ -23,7 +21,7 @@ public class ProcessManager
 
     public void GetProcessByIndex(int index)
     {
-        AttacherConfig attacherConfig = listAttacherConfig[index];
+        AttacherConfig attacherConfig = recorderConfig.listAttacherConfig[index];
         string processName = Path.GetFileNameWithoutExtension(recorderConfig.applicationPath);
         process = Process.GetProcessesByName(processName)
             .Where(i => !i.MainWindowTitle.Contains("fla-ui-recorder"))
@@ -49,10 +47,10 @@ public class ProcessManager
         while (process == null)
         {
             Thread.Sleep(200);
-            string processName = Path.GetFileNameWithoutExtension(recorderConfig.applicationPath);
 
-            if (string.IsNullOrEmpty(listAttacherConfig[0].mainWindowTitle))
+            if (recorderConfig.listAttacherConfig == null)
             {
+                string processName = Path.GetFileNameWithoutExtension(recorderConfig.applicationPath);
                 process = Process.GetProcessesByName(processName).FirstOrDefault();
             }
             else
@@ -63,25 +61,22 @@ public class ProcessManager
 
         attacherIndex++;
 
-        if(attacherIndex == listAttacherConfig.Count)
+        if (attacherIndex == recorderConfig.listAttacherConfig.Count)
         {
             attacherIndex--;
         }
-
-        Trace.WriteLine($"debug2 {process.MainWindowTitle}");
 
         return process;
     }
 
     public void Kill()
     {
-        for (int i = 0; i < listAttacherConfig.Count; i++)
+        for (int i = 0; i < recorderConfig.listAttacherConfig.Count; i++)
         {
-            GetProcessByIndex(listAttacherConfig.Count - i - 1);
+            GetProcessByIndex(recorderConfig.listAttacherConfig.Count - i - 1);
 
             try
             {
-                Trace.WriteLine($"debug3 {listAttacherConfig.Count - i - 1}");
                 process.Kill();
                 break;
             }

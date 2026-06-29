@@ -1,3 +1,8 @@
-solutionName: 'fla-ui-recorder'
+applicationPath: 'C:/Program Files/Microsoft Visual Studio/18/Community/Common7/IDE/devenv.exe'
 stepDirectoryPath: 'C:/fla-ui-recorder'
-visualStudioPath: 'C:/Program Files/Microsoft Visual Studio/18/Community/Common7/IDE/devenv.exe'
+stepName: 'test'
+listAttacherConfig:
+  - mainWindowTitle: 'Microsoft Visual Studio'
+    bExactMatch: true
+  - mainWindowTitle: 'Microsoft Visual Studio'
+    bExactMatch: false

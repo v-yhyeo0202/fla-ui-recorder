@@ -1,14 +1,20 @@
 ﻿using System.ComponentModel;
 using System.Text.Json.Serialization;
-using YamlDotNet.Serialization;
 
-namespace console_app;
+namespace Recorder;
 
-
-public class ProcessFilter
+public class AttacherConfig
 {
-    public string mainWindowTitle = null;
-    public bool bContains = false;
+    public string mainWindowTitle { get; set; } = null;
+    public bool bExactMatch { get; set; } = false;
+}
+
+public class RecorderConfig
+{
+    public string applicationPath { get; set; } = null;
+    public string stepDirectoryPath { get; set; } = null;
+    public string stepName { get; set; } = null;
+    public List<AttacherConfig> listAttacherConfig { get; set; } = null;
 }
 
 public class StepConfig
@@ -27,16 +33,4 @@ public class StepConfig
     [DefaultValue(false)]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public bool bEvaluation { get; set; } = false;
-}
-
-public class UserConfig
-{
-    [YamlMember(Alias = "solutionName")]
-    public string solutionName { get; set; } = null;
-
-    [YamlMember(Alias = "stepDirectoryPath")]
-    public string stepDirectoryPath { get; set; } = null;
-
-    [YamlMember(Alias = "visualStudioPath")]
-    public string visualStudioPath { get; set; } = null;
 }

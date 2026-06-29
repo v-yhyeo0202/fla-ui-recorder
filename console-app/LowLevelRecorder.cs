@@ -1,10 +1,11 @@
 ﻿using System.Drawing;
 using System.Runtime.InteropServices;
 
-namespace console_app;
+namespace Recorder;
 
 public class LowLevelRecorder
 {
+    [DllImport("user32.dll")] static extern IntPtr CallNextHookEx(IntPtr hhk, int nCode, IntPtr wParam, IntPtr lParam);
     [DllImport("kernel32.dll")] static extern uint GetCurrentThreadId();
     [DllImport("user32.dll")] static extern uint GetDoubleClickTime();
     [DllImport("user32.dll")] static extern int GetMessage(out MSG lpMsg, IntPtr hWnd, uint wMsgFilterMin, uint wMsgFilterMax);
@@ -13,19 +14,23 @@ public class LowLevelRecorder
     [DllImport("user32.dll")] static extern bool UnhookWindowsHookEx(IntPtr hhk);
 
     private uint hookThreadId = 0;
+    IntPtr keyboardHook;
+    IntPtr mouseHook;
     private uint previousLeftButtonDownTime = 0;
     private Thread thread;
     private Action addMouseClickStep = null;
     private Action setMouseClickStep = null;
     private Action addEvaluationStep = null;
+    private Action<int> registerAutomationEvent = null;
 
     public bool bKeyPress = true;
     public ClickType clickType { get; set; } = default;
     public Point mousePosition { get; set; }
+    public bool bRecord { get; set; } = false;
 
     private IntPtr GetKeyPressData(int nCode, IntPtr wParam, IntPtr lParam)
     {
-        if(nCode >= 0)
+        if(nCode >= 0 && bRecord)
         {
             bKeyPress = true;
             KBDLLHOOKSTRUCT keyPressData = Marshal.PtrToStructure<KBDLLHOOKSTRUCT>(lParam);
@@ -34,17 +39,21 @@ public class LowLevelRecorder
             {
                 Task.Run(() => addEvaluationStep());
             }
+            else if ((int)wParam == 0x100 && keyPressData.vkCode == 0xA3)
+            {
+                Task.Run(() => registerAutomationEvent(0));
+            }
 
             Thread.Sleep(100);
             bKeyPress = false;
         }
 
-        return 0;
+        return CallNextHookEx(keyboardHook, nCode, wParam, lParam);
     }
 
     private IntPtr GetMouseClickData(int nCode, IntPtr wParam, IntPtr lParam)
     {
-        if (nCode >= 0)
+        if (nCode >= 0 && bRecord)
         {
             MSLLHOOKSTRUCT mouseClickData = Marshal.PtrToStructure<MSLLHOOKSTRUCT>(lParam);
             mousePosition = mouseClickData.pt;
@@ -71,7 +80,7 @@ public class LowLevelRecorder
             }
         }
 
-        return 0;
+        return CallNextHookEx(mouseHook, nCode, wParam, lParam);
     }
 
     public LowLevelRecorder()
@@ -79,8 +88,8 @@ public class LowLevelRecorder
         thread = new Thread(() =>
         {
             hookThreadId = GetCurrentThreadId();
-            IntPtr keyboardHook = SetWindowsHookEx(13, GetKeyPressData, 0, 0);
-            IntPtr mouseHook = SetWindowsHookEx(14, GetMouseClickData, 0, 0);
+            keyboardHook = SetWindowsHookEx(13, GetKeyPressData, 0, 0);
+            mouseHook = SetWindowsHookEx(14, GetMouseClickData, 0, 0);
 
             while (GetMessage(out MSG msg, 0, 0, 0) != 0) { }
 
@@ -92,11 +101,12 @@ public class LowLevelRecorder
         return;
     }
 
-    public void SetStep(Action _addMouseClickStep, Action _setMouseClickStep, Action _addEvaluationStep)
+    public void SetStep(Action _addMouseClickStep, Action _setMouseClickStep, Action _addEvaluationStep, Action<int> _registerAutomationEvent)
     {
         addMouseClickStep = _addMouseClickStep;
         setMouseClickStep = _setMouseClickStep;
         addEvaluationStep = _addEvaluationStep;
+        registerAutomationEvent = _registerAutomationEvent;
 
         return;
     }
