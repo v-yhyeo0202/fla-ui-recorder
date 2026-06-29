@@ -6,4 +6,5 @@ public interface IFormDependency
     Task SetComboBoxItemAsync(object _listItem, string propertyName);
     Task PostInsertAsync(object _listInput);
     void PostApply(object _listInput);
+    void PostSearchPath(object input);
 }

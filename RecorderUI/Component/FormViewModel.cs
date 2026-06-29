@@ -1,8 +1,9 @@
-﻿using RecorderUI.Core;
+﻿using Microsoft.Win32;
+using RecorderUI.Core;
 using RecorderUI.ViewModel;
-using Microsoft.Win32;
 using Shared;
 using System.Collections.ObjectModel;
+using System.Runtime.Intrinsics.Arm;
 using System.Windows;
 using System.Windows.Input;
 
@@ -103,7 +104,10 @@ public class ComboForm : BaseForm
 
 public class PathForm : BaseForm
 {
+    private Utility utility;
     public bool bFilePath;
+    public bool bSave;
+    public IFormDependency formDependency;
     private string _input = null;
     public string input { get { return _input; } set { _input = value; OnPropertyChanged(nameof(input)); } }
 
@@ -113,7 +117,7 @@ public class PathForm : BaseForm
     {
         bool? status = null;
 
-        if (bFilePath)
+        if (bFilePath && !bSave)
         {
             OpenFileDialog openFileDialog = new();
             status = openFileDialog.ShowDialog();
@@ -121,6 +125,16 @@ public class PathForm : BaseForm
             if ((status != null) && (bool)status)
             {
                 input = openFileDialog.FileName;
+            }
+        }
+        else if (bFilePath && bSave)
+        {
+            SaveFileDialog saveFileDialog = new();
+            status = saveFileDialog.ShowDialog();
+
+            if ((status != null) && (bool)status)
+            {
+                input = saveFileDialog.FileName;
             }
         }
         else
@@ -134,11 +148,25 @@ public class PathForm : BaseForm
             }
         }
 
+        if(formDependency != null)
+        {
+            try
+            {
+                formDependency.PostSearchPath(input);
+            }
+            catch (Exception e)
+            {
+                utility.ShowExceptionMessage(e, $"{nameof(ConfigViewModel)}.{nameof(ConfigViewModel)}");
+            }
+        }
+
         return;
     }
 
-    public PathForm()
+    public PathForm(IFormDependency _formDependency = null)
     {
+        utility = new Utility();
+        formDependency = _formDependency;
         addPathCommand = new RelayCommand(AddPath);
 
         return;

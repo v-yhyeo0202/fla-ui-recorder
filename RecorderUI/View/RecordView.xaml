@@ -67,7 +67,7 @@
             <Button
                 Height="{StaticResource buttonHeight}"
                 Width="{StaticResource buttonWidth}"
-                Command="{Binding StopCommand}"
+                Command="{Binding StopAsyncCommand}"
                 Content="⏹️ Stop"/>
         </StackPanel>
     </StackPanel>

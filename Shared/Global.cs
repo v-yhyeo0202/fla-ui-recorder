@@ -12,7 +12,7 @@ public static class Global
             "RecorderConfig",
             new()
             {
-                labelWidth = 100,
+                labelWidth = 150,
                 bApply = true,
                 dictPropertyConfig = new Dictionary<string, FormPropertyConfig>
                 {
@@ -25,12 +25,57 @@ public static class Global
                         }
                     },
                     {
+                        "attacherConfigPath",
+                        new()
+                        {
+                            displayName = "Attacher configuration path",
+                            formType = FormType.PathForm
+                        }
+                    },
+                    {
                         "stepDirectoryPath",
                         new()
                         {
                             displayName = "Step directory path",
                             formType = FormType.PathForm,
                             bFilePath = false
+                        }
+                    },
+                    {
+                        "stepName",
+                        new()
+                        {
+                            displayName = "Step name",
+                            formType = FormType.TextForm
+                        }
+                    }
+                }
+            }
+        },
+        {
+            "AttacherConfig",
+            new()
+            {
+                labelWidth = 150,
+                bAddItem = true,
+                bApply = true,
+                bSpecifyConfigPath = true,
+                dictPropertyConfig = new Dictionary<string, FormPropertyConfig>
+                {
+                    {
+                        "mainWindowTitle",
+                        new()
+                        {
+                            displayName = "Main window title",
+                            formType = FormType.TextForm
+                        }
+                    },
+                    {
+                        "bExactMatch",
+                        new()
+                        {
+                            displayName = "Exact match",
+                            formType = FormType.CheckBoxForm
                         }
                     }
                 }

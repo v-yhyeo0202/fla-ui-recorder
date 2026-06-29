@@ -161,6 +161,7 @@ public class ConfigFormSourceGen : IIncrementalGenerator
             StringBuilder sbSource = new();
             sbSource.Append(
                 $$"""
+                using Microsoft.Win32;
                 using Minerals.StringCases;
                 using System.Collections.ObjectModel;
                 using System.Diagnostics;
@@ -182,6 +183,7 @@ public class ConfigFormSourceGen : IIncrementalGenerator
                     public override void AddItem(object parameter)
                     {
                         listFormWrapper.Add(new FormWrapper());
+                        {{className}} defaultInput = new();
 
 
                 """);
@@ -201,6 +203,7 @@ public class ConfigFormSourceGen : IIncrementalGenerator
                                     labelWidth = {{(Global.dictFormConfig[className].dictPropertyConfig[propertyName].labelWidth != 0 ?
                                     Global.dictFormConfig[className].dictPropertyConfig[propertyName].labelWidth :
                                     Global.dictFormConfig[className].labelWidth)}},
+                                    input = defaultInput.{{propertyName}},
 
                     """);
 
@@ -209,6 +212,8 @@ public class ConfigFormSourceGen : IIncrementalGenerator
                     sbSource.Append(
                         $$"""
                                         bFilePath = {{(Global.dictFormConfig[className].dictPropertyConfig[propertyName].bFilePath ? "true" : "false")}},
+                                        bSave = {{(Global.dictFormConfig[className].dictPropertyConfig[propertyName].bSave ? "true" : "false")}},
+                                        formDependency = formDependency,
 
                         """);
                 }
@@ -320,6 +325,30 @@ public class ConfigFormSourceGen : IIncrementalGenerator
                     public override async Task ApplyAsync(object parameter)
                     {
                         List<{{className}}> listInput = GetInput();
+
+
+                """);
+
+            if (Global.dictFormConfig[className].bSpecifyConfigPath)
+            {
+                sbSource.Append(
+                    $$"""
+                            SaveFileDialog saveFileDialog = new();
+                            bool? status = saveFileDialog.ShowDialog();
+
+                            if ((status != null) && (bool)status)
+                            {
+                                configPath = saveFileDialog.FileName;
+                            }
+                            else
+                            {
+                                return;
+                            }
+                    """);
+            }
+
+            sbSource.Append(
+                $$"""
                         await File.WriteAllTextAsync(
                             configPath,
                             JsonSerializer.Serialize(
@@ -348,7 +377,36 @@ public class ConfigFormSourceGen : IIncrementalGenerator
 
                         return;
                     }
-                    
+
+                """);
+
+            List<string> listAsyncText = new() { "", "async" };
+            List<string> listAwaitText = new() { "", "await" };
+            List<string> listReturnTypeText = new() { "void", "Task" };
+
+            string asyncText;
+            string capitalizedAsyncText;
+
+            for (int i = 0; i < listAsyncText.Count; i++)
+            {
+                asyncText = listAsyncText[i];
+                capitalizedAsyncText = string.IsNullOrEmpty(asyncText) ? null : char.ToUpper(asyncText.First()) + asyncText.Substring(1);
+
+                sbSource.Append(
+                    $$"""
+                        public {{asyncText}} {{listReturnTypeText[i]}} LoadInput{{capitalizedAsyncText}}(string _configPath)
+                        {
+                            configPath = _configPath;
+                            List<{{className}}> listInput = JsonSerializer.Deserialize<List<{{className}}>>({{listAwaitText[i]}} File.ReadAllText{{capitalizedAsyncText}}(configPath));
+                            SetInput(listInput);
+                
+                            return;
+                        }
+                    """);
+            }
+
+            sbSource.Append(
+                $$"""
                     public {{className}}Form(FormConfig localFormConfig = null, IFormDependency _formDependency = null) :
                         base(Global.dictFormConfig["{{className}}"], localFormConfig, _formDependency)
                     {
@@ -357,19 +415,19 @@ public class ConfigFormSourceGen : IIncrementalGenerator
                         
                         if(File.Exists(configPath))
                         {
-                            List<{{className}}> listInput = JsonSerializer.Deserialize<List<{{className}}>>(File.ReadAllText(configPath));
-                            SetInput(listInput);
+                            LoadInput(configPath);
                         }
                         else
                         {
-                            List<{{className}}> listInput = new()
-                            {
-                                new {{className}}()
-                            };
-                            SetInput(listInput);
+                            AddItem(null);
                         }
                         
                         return;
+                    }
+
+                    public string GetConfigPath()
+                    {
+                        return configPath;
                     }
                 }
                 """);

@@ -21,6 +21,7 @@ public class FormPropertyConfig
     public string itemSelectCode = null;
     public int labelWidth = 0;
     public bool bFilePath = true;
+    public bool bSave = false;
 }
 
 public class FormConfig
@@ -29,6 +30,7 @@ public class FormConfig
     public bool bAddItem = false;
     public bool bApply = false;
     public string applyConditionCommandText = null;
+    public bool bSpecifyConfigPath = false;
 
     public Dictionary<string, FormPropertyConfig> dictPropertyConfig = null;
 }
